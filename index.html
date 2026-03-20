@@ -631,7 +631,10 @@
                 type_placeholder: "Type a message...",
                 send_btn: "Send",
                 lang_label: "Interface Language",
-                upload_error: "Upload failed!"
+                upload_error: "Upload failed!",
+                channels_label: "CHANNELS",
+                groups_label: "GROUPS",
+                messages_label: "MESSAGES"
             },
             ru: {
                 auth_title: "OBSCURE",
@@ -656,7 +659,10 @@
                 type_placeholder: "Напишите сообщение...",
                 send_btn: "Отправить",
                 lang_label: "Язык интерфейса",
-                upload_error: "Загрузка не удалась!"
+                upload_error: "Загрузка не удалась!",
+                channels_label: "КАНАЛЫ",
+                groups_label: "ГРУППЫ",
+                messages_label: "СООБЩЕНИЯ"
             }
         };
 
@@ -807,7 +813,22 @@
             updateTabTitle();
             chatPlaceholder.style.display = 'none';
             chatArea.style.display = 'flex';
-            document.getElementById('current-chat-name').innerText = chat.isSaved ? translations[currentLang].saved_messages : (chat.display_name || chat.username || chat.name);
+            
+            const name = chat.isSaved ? translations[currentLang].saved_messages : (chat.display_name || chat.username || chat.name);
+            document.getElementById('current-chat-name').innerText = name;
+            
+            const av = document.getElementById('current-chat-avatar');
+            av.style.background = chat.isSaved ? 'var(--accent)' : 'var(--accent-soft)';
+            av.style.color = 'white';
+            
+            if (chat.isSaved) {
+                av.innerHTML = '💾';
+            } else if (chat.avatar_url) {
+                av.innerHTML = `<img src="${chat.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+            } else {
+                av.innerText = name ? name[0].toUpperCase() : '?';
+            }
+
             loadMessages();
             loadContacts();
             if (window.innerWidth <= 768) sidebar.classList.add('hidden');
@@ -825,38 +846,69 @@
 
             // Saved Messages
             const saved = document.createElement('div');
-            saved.className = 'contact-item';
-            saved.innerHTML = `<div class="avatar" style="background:var(--accent);">💾</div><div class="contact-info"><div class="contact-name">${t.saved_messages}</div></div>`;
+            saved.className = `contact-item ${activeChat?.isSaved ? 'active' : ''}`;
+            const unreadSaved = unreadCounts[currentUser.id] || 0;
+            saved.innerHTML = `<div class="avatar" style="background:var(--accent);">💾</div><div class="contact-info"><div class="contact-name">${t.saved_messages}</div></div>${unreadSaved > 0 ? `<div class="unread-badge">${unreadSaved}</div>` : ''}`;
             saved.onclick = () => selectChat({ id: currentUser.id, isSaved: true });
             contactList.appendChild(saved);
 
             // Channels
-            groups.filter(g => g.is_channel).forEach(g => {
-                const item = document.createElement('div');
-                item.className = 'contact-item';
-                item.innerHTML = `<div class="avatar" style="background:var(--accent-soft);color:var(--accent);">📣</div><div class="contact-info"><div class="contact-name">${g.name}</div><div class="contact-status">Channel</div></div>`;
-                item.onclick = () => selectChat(g);
-                contactList.appendChild(item);
-            });
+            const channels = groups.filter(g => g.is_channel);
+            if (channels.length > 0) {
+                const h = document.createElement('div');
+                h.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
+                h.innerText = t.channels_label;
+                contactList.appendChild(h);
+                channels.forEach(g => {
+                    const item = document.createElement('div');
+                    item.className = `contact-item ${activeChat?.id === g.id ? 'active' : ''}`;
+                    const unread = unreadCounts[g.id] || 0;
+                    item.innerHTML = `<div class="avatar" style="background:var(--accent-soft);color:var(--accent);">📣</div><div class="contact-info"><div class="contact-name">${g.name}</div><div class="contact-status">Public Channel</div></div>${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}`;
+                    item.onclick = () => selectChat(g);
+                    contactList.appendChild(item);
+                });
+            }
 
             // Groups
-            groups.filter(g => !g.is_channel).forEach(g => {
-                const item = document.createElement('div');
-                item.className = 'contact-item';
-                item.innerHTML = `<div class="avatar" style="background:var(--accent-soft);color:var(--accent);">👥</div><div class="contact-info"><div class="contact-name">${g.name}</div><div class="contact-status">Group</div></div>`;
-                item.onclick = () => selectChat(g);
-                contactList.appendChild(item);
-            });
+            const prGroups = groups.filter(g => !g.is_channel);
+            if (prGroups.length > 0) {
+                const h = document.createElement('div');
+                h.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
+                h.innerText = t.groups_label;
+                contactList.appendChild(h);
+                prGroups.forEach(g => {
+                    const item = document.createElement('div');
+                    item.className = `contact-item ${activeChat?.id === g.id ? 'active' : ''}`;
+                    const unread = unreadCounts[g.id] || 0;
+                    item.innerHTML = `<div class="avatar" style="background:var(--accent-soft);color:var(--accent);">👥</div><div class="contact-info"><div class="contact-name">${g.name}</div><div class="contact-status">Private Group</div></div>${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}`;
+                    item.onclick = () => selectChat(g);
+                    contactList.appendChild(item);
+                });
+            }
 
             // Users
-            profiles.forEach(p => {
-                const item = document.createElement('div');
-                item.className = 'contact-item';
-                const unread = unreadCounts[p.id] || 0;
-                item.innerHTML = `<div class="avatar">${p.username[0].toUpperCase()}</div><div class="contact-info"><div class="contact-name">${p.display_name || p.username}</div></div>${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}`;
-                item.onclick = () => selectChat(p);
-                contactList.appendChild(item);
-            });
+            if (profiles.length > 0) {
+                const h = document.createElement('div');
+                h.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
+                h.innerText = t.messages_label;
+                contactList.appendChild(h);
+                profiles.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = `contact-item ${activeChat?.id === p.id && !activeChat.isSaved ? 'active' : ''}`;
+                    const unread = unreadCounts[p.id] || 0;
+                    const name = p.display_name || p.username;
+                    item.innerHTML = `<div class="avatar" style="${p.avatar_url ? '' : 'background: ' + getAvatarColor(name)}">${p.avatar_url ? `<img src="${p.avatar_url}" style="width:100%;height:100%;border-radius:inherit;object-fit:cover;">` : name[0].toUpperCase()}</div><div class="contact-info"><div class="contact-name">${name}</div></div>${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}`;
+                    item.onclick = () => selectChat(p);
+                    contactList.appendChild(item);
+                });
+            }
+        }
+
+        function getAvatarColor(name) {
+            const colors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#2dd4bf', '#22d3ee', '#60a5fa', '#818cf8', '#a78bfa', '#c084fc', '#f472b6'];
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            return colors[Math.abs(hash) % colors.length];
         }
 
         async function loadMessages() {
