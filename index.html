@@ -9,21 +9,24 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
-            --bg: #0a0a0a;
-            --surface: rgba(18, 18, 18, 0.95);
+            --bg: #030303;
+            --surface: rgba(13, 13, 13, 0.85);
             --accent: #8b5cf6;
-            --accent-glow: rgba(139, 92, 246, 0.2);
-            --text: #f8fafc;
-            --text-dim: #94a3b8;
-            --glass: rgba(255, 255, 255, 0.05);
-            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent-soft: rgba(139, 92, 246, 0.15);
+            --accent-border: rgba(139, 92, 246, 0.3);
+            --text: #ffffff;
+            --text-dim: #a1a1aa;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --radius-lg: 20px;
+            --radius-md: 14px;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', -apple-system, sans-serif;
+            font-family: 'Inter', sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -34,26 +37,48 @@
             width: 100vw;
             overflow: hidden;
             display: flex;
+            position: relative;
         }
 
-        /* Ambient Background - CLEANED UP */
-        .bg-glow {
-            display: none; /* Removed as requested */
+        /* Ambient Dynamic Background */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 30%, #1e1b4b 0%, transparent 40%),
+                        radial-gradient(circle at 70% 70%, #312e81 0%, transparent 40%);
+            z-index: -1;
+            filter: blur(80px);
+            animation: bgMove 20s infinite alternate ease-in-out;
+            opacity: 0.6;
         }
 
-        /* Glass Container - FULL SCREEN */
+        @keyframes bgMove {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            100% { transform: translate(5%, 5%) rotate(5deg); }
+        }
+
+        /* Glass Panel */
         .glass-panel {
             background: var(--surface);
-            backdrop-filter: blur(10px);
-            border: none;
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
             width: 100%;
             height: 100%;
             display: flex;
             overflow: hidden;
-            animation: fadeIn 0.4s ease-out;
+            animation: panelFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        /* Auth Screen - CLEANER */
+        @keyframes panelFade {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Auth Screen */
         #auth-screen {
             display: flex;
             flex-direction: column;
@@ -61,47 +86,60 @@
             justify-content: center;
             width: 100%;
             height: 100%;
-            background: var(--bg);
-            padding: 40px;
-            text-align: center;
-            z-index: 100;
+            padding: 30px;
+            background: radial-gradient(circle at center, rgba(139, 92, 246, 0.05) 0%, transparent 70%);
         }
 
         .auth-card {
             width: 100%;
-            max-width: 380px;
+            max-width: 400px;
+            padding: 40px;
+            border-radius: 28px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(10px);
+            text-align: center;
         }
 
         h1 {
-            font-size: 3rem;
-            margin-bottom: 12px;
-            letter-spacing: -2px;
+            font-size: 3.5rem;
             font-weight: 800;
-            color: #fff;
+            letter-spacing: -3px;
+            margin-bottom: 8px;
+            background: linear-gradient(to bottom, #fff, #a1a1aa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         p.subtitle {
             color: var(--text-dim);
             margin-bottom: 40px;
             font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+            text-align: left;
         }
 
         input {
             width: 100%;
             padding: 16px 20px;
-            margin-bottom: 12px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
             color: white;
             outline: none;
-            transition: 0.2s;
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             font-size: 1rem;
         }
 
         input:focus {
+            background: rgba(255, 255, 255, 0.06);
             border-color: var(--accent);
-            background: #222;
+            box-shadow: 0 0 0 4px var(--accent-soft);
         }
 
         button {
@@ -109,23 +147,31 @@
             padding: 16px;
             background: var(--accent);
             border: none;
-            border-radius: 14px;
+            border-radius: var(--radius-md);
             color: white;
             font-weight: 700;
             cursor: pointer;
-            transition: 0.2s;
-            margin-top: 8px;
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             font-size: 1rem;
+            margin-top: 10px;
         }
 
-        button:active {
-            transform: scale(0.98);
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
         }
+
+        button:active { transform: scale(0.98); }
 
         button.secondary {
-            background: transparent;
-            border: 1px solid #333;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
             margin-top: 16px;
+        }
+
+        button.secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: none;
         }
 
         /* Messenger Layout */
@@ -135,129 +181,121 @@
             height: 100%;
         }
 
+        /* Sidebar Styles */
         .sidebar {
-            width: 340px;
+            width: 360px;
             border-right: 1px solid var(--glass-border);
             display: flex;
             flex-direction: column;
-            background: #0d0d0d;
-            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(0, 0, 0, 0.2);
         }
 
-        .sidebar-header {
+        .me-bar {
             padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
             border-bottom: 1px solid var(--glass-border);
         }
 
-        .search-box {
-            position: relative;
-            margin-top: 16px;
+        .me-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--accent), #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
         }
 
-        .search-box input {
-            margin-bottom: 0;
-            font-size: 0.9rem;
-            padding: 12px 16px;
-            border-radius: 10px;
+        .me-info h3 { font-size: 1rem; font-weight: 700; }
+        .me-info p { font-size: 0.8rem; color: #4ade80; font-weight: 600; }
+
+        .sidebar-search {
+            padding: 20px 24px;
         }
 
         .contact-list {
             flex: 1;
             overflow-y: auto;
-            padding: 12px;
+            padding: 0 12px 12px;
         }
 
         .contact-item {
-            padding: 14px 16px;
-            border-radius: 16px;
+            padding: 16px;
+            border-radius: var(--radius-lg);
             cursor: pointer;
             transition: 0.2s;
             display: flex;
             align-items: center;
-            gap: 14px;
-            margin-bottom: 6px;
+            gap: 16px;
+            margin-bottom: 4px;
         }
 
-        .contact-item:hover {
-            background: var(--glass);
-        }
-
-        .contact-item.active {
-            background: var(--glass);
-            border-left: 4px solid var(--accent);
-        }
+        .contact-item:hover { background: rgba(255, 255, 255, 0.04); }
+        .contact-item.active { background: var(--accent-soft); border: 1px solid var(--accent-border); }
 
         .avatar {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, var(--accent), #4f46e5);
-            border-radius: 14px;
+            width: 48px;
+            height: 48px;
+            border-radius: 15px;
+            background: #27272a;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 0.9rem;
-            color: white;
+            font-size: 1rem;
+            color: #fff;
         }
 
-        .contact-info {
-            flex: 1;
-        }
-
-        .contact-name {
-            font-weight: 600;
-            font-size: 0.95rem;
-        }
-
-        .contact-status {
-            font-size: 0.8rem;
-            color: var(--text-dim);
-        }
+        .contact-name { font-weight: 600; font-size: 1rem; margin-bottom: 2px; }
+        .contact-status { font-size: 0.8rem; color: var(--text-dim); }
 
         /* Chat Area */
         .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #080808;
-            position: relative;
+            background: rgba(0, 0, 0, 0.1);
         }
 
         .chat-header {
-            padding: 16px 24px;
+            padding: 20px 32px;
+            background: rgba(10, 10, 10, 0.4);
+            backdrop-filter: blur(10px);
             border-bottom: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
-            gap: 12px;
-            background: rgba(10, 10, 10, 0.8);
-            backdrop-filter: blur(10px);
-            z-index: 10;
+            gap: 16px;
         }
 
-        .back-btn {
-            display: none;
-            cursor: pointer;
-            padding: 8px;
-            margin-right: 8px;
-        }
+        .active-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 8px #4ade80; }
 
         .message-feed {
             flex: 1;
-            padding: 24px;
+            padding: 32px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 14px;
         }
 
         .message {
-            max-width: 80%;
-            padding: 12px 18px;
-            border-radius: 20px;
-            font-size: 1rem;
-            position: relative;
+            max-width: 75%;
+            padding: 14px 20px;
+            border-radius: 22px;
+            font-size: 0.95rem;
             line-height: 1.5;
-            word-wrap: break-word;
+            position: relative;
+            animation: msgPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes msgPop {
+            from { opacity: 0; transform: translateY(10px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         .message.sent {
@@ -269,62 +307,43 @@
 
         .message.received {
             align-self: flex-start;
-            background: #1a1a1a;
-            border: 1px solid #333;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
             border-bottom-left-radius: 4px;
         }
 
         .message-time {
             font-size: 0.7rem;
             margin-top: 6px;
-            opacity: 0.6;
+            opacity: 0.5;
             text-align: right;
         }
 
         .chat-input-area {
-            padding: 20px 24px;
+            padding: 24px 32px;
+            background: rgba(10, 10, 10, 0.4);
             border-top: 1px solid var(--glass-border);
             display: flex;
-            gap: 12px;
-            background: #0a0a0a;
+            gap: 16px;
         }
 
         .chat-input-area input {
-            margin-bottom: 0;
-            border-radius: 12px;
+            border-radius: 15px;
+            background: rgba(0, 0, 0, 0.2);
         }
 
         .chat-input-area button {
             width: auto;
             margin-top: 0;
-            padding: 0 24px;
-            border-radius: 12px;
+            padding: 0 28px;
+            border-radius: 15px;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        /* Mobile Responsive */
         @media (max-width: 768px) {
-            .sidebar {
-                width: 100%;
-                z-index: 20;
-            }
-            .sidebar.hidden {
-                display: none;
-            }
-            .chat-area {
-                width: 100%;
-                display: none;
-            }
-            .chat-area.active {
-                display: flex;
-            }
-            .back-btn {
-                display: block;
-            }
+            .sidebar { width: 100%; position: absolute; height: 100%; z-index: 20; }
+            .sidebar.hidden { transform: translateX(-100%); }
+            .chat-area { width: 100%; }
+            .back-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.05); cursor: pointer; }
         }
     </style>
 </head>
@@ -350,35 +369,45 @@
 
         <!-- Messenger View -->
         <div id="messenger-screen">
-            <div class="sidebar">
-                <div class="sidebar-header">
-                    <h2>Chats</h2>
-                    <div class="search-box">
-                        <input type="text" id="user-search" placeholder="Search by ID...">
+            <div class="sidebar" id="sidebar">
+                <div class="me-bar">
+                    <div class="me-avatar" id="my-avatar">?</div>
+                    <div class="me-info">
+                        <h3 id="my-username">Loading...</h3>
+                        <p>Online</p>
                     </div>
+                </div>
+                <div class="sidebar-search">
+                    <input type="text" id="user-search" placeholder="Find user by ID...">
                 </div>
                 <div class="contact-list" id="contact-list">
                     <!-- Contacts will appear here -->
                 </div>
-                <div style="padding: 12px;">
-                    <button id="btn-logout" class="secondary" style="padding: 8px; font-size: 0.8rem;">Logout</button>
+                <div style="padding: 16px; border-top: 1px solid var(--glass-border);">
+                    <button id="btn-logout" class="secondary" style="padding: 10px; font-size: 0.8rem; margin-top: 0;">Logout</button>
                 </div>
             </div>
 
             <div class="chat-area" id="chat-placeholder"
-                style="align-items: center; justify-content: center; color: var(--text-dim);">
-                <p>Select a contact to start messaging</p>
+                style="align-items: center; justify-content: center; color: var(--text-dim); text-align: center; padding: 40px;">
+                <div style="opacity: 0.3; margin-bottom: 20px;">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <p>Select a conversation to start<br>or search for a friend by ID</p>
             </div>
 
             <div class="chat-area" id="chat-main" style="display: none;">
                 <div class="chat-header">
                     <div class="back-btn" id="btn-back">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                     </div>
                     <div class="avatar" id="current-chat-avatar">?</div>
-                    <div>
+                    <div style="flex: 1;">
                         <div class="contact-name" id="current-chat-name">Unknown</div>
-                        <div class="contact-status">online</div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <div class="active-dot"></div>
+                            <div class="contact-status" style="color: #4ade80;">Active now</div>
+                        </div>
                     </div>
                 </div>
                 <div class="message-feed" id="message-feed">
@@ -426,9 +455,8 @@
 
             if (!username || !password) return;
 
-            // Proxy username to email for Supabase Auth
+            // Proxy username to email for Supabase Auth (Invisible to user)
             const email = `${username}@obscure.app`;
-
             errorEl.style.display = 'none';
 
             let result;
@@ -439,22 +467,20 @@
             }
 
             if (result.error) {
-                errorEl.innerText = result.error.message;
+                if (result.error.message.includes("Email not confirmed")) {
+                    errorEl.innerHTML = `Login error: User exists but not confirmed.<br>Run the FIX script in Supabase SQL Editor!`;
+                } else {
+                    errorEl.innerText = result.error.message;
+                }
                 errorEl.style.display = 'block';
             } else {
-                // Ensure profile exists in profiles table
-                const { data: profile } = await _supabase.from('profiles').select('*').eq('id', result.data.user.id).single();
-                
-                if (!profile) {
-                    const { error: pErr } = await _supabase.from('profiles').insert({
-                        id: result.data.user.id,
-                        username: username
-                    });
-                    if (pErr) console.error("Profile creation error:", pErr);
-                }
+                // Ensure profile exists (Auto-repair if SQL trigger wasn't run)
+                await ensureProfileExists(result.data.user.id, username);
 
                 if (type === 'signup' && !result.data.session) {
-                    alert("Account created! Please confirm user in Supabase (Users table) OR disable 'Confirm Email' in settings.");
+                    errorEl.innerHTML = "Account created!<br>Run the FIX script in Supabase to log in.";
+                    errorEl.style.color = "#4ade80";
+                    errorEl.style.display = 'block';
                 } else {
                     currentUser = result.data.user;
                     showMessenger();
@@ -462,17 +488,32 @@
             }
         }
 
+        async function ensureProfileExists(id, username) {
+            const { data: profile } = await _supabase.from('profiles').select('*').eq('id', id).single();
+            if (!profile) {
+                await _supabase.from('profiles').insert({ id, username });
+            }
+        }
+
         async function showMessenger() {
             authScreen.style.display = 'none';
             messengerScreen.style.display = 'flex';
+            
+            // Set current user info
+            const username = currentUser.email.split('@')[0];
+            document.getElementById('my-username').innerText = username;
+            document.getElementById('my-avatar').innerText = username[0].toUpperCase();
+
             loadContacts();
 
             // Subscribe to real-time messages
             _supabase.channel('messages')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
                     const msg = payload.new;
+                    // Only append if it's part of active chat AND not already there
                     if (activeChat && (msg.sender_id === activeChat.id || msg.receiver_id === activeChat.id)) {
-                        appendMessage(msg);
+                        const existing = document.getElementById(`msg-${msg.id}`);
+                        if (!existing) appendMessage(msg);
                     }
                     loadContacts();
                 })
@@ -540,7 +581,7 @@
 
         async function selectChat(profile) {
             activeChat = profile;
-            
+
             // Mobile navigation: hide sidebar, show chat
             if (window.innerWidth <= 768) {
                 document.querySelector('.sidebar').classList.add('hidden');
@@ -557,8 +598,7 @@
 
         // Back button for mobile
         document.getElementById('btn-back').onclick = () => {
-            document.querySelector('.sidebar').classList.remove('hidden');
-            document.getElementById('chat-main').classList.remove('active');
+            document.getElementById('sidebar').classList.remove('hidden');
             document.getElementById('chat-main').style.display = 'none';
             document.getElementById('chat-placeholder').style.display = 'flex';
         };
@@ -580,6 +620,7 @@
             const isSent = msg.sender_id === currentUser.id;
             const div = document.createElement('div');
             div.className = `message ${isSent ? 'sent' : 'received'}`;
+            div.id = `msg-${msg.id}`; // Add ID to prevent duplicates
             div.innerHTML = `
                 ${msg.content}
                 <div class="message-time">${new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
