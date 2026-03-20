@@ -601,7 +601,6 @@
 
     <script>
         // --- Supabase Config ---
-        // REPLACE THESE WITH YOUR OWN SUPABASE PROJECT DETAILS
         const SUPABASE_URL = 'https://apkwkiszxbedcieohoeq.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_03Ep--VuOU3PTtguDDXXxA_fbgD8F8p';
 
@@ -632,7 +631,7 @@
                 type_placeholder: "Type a message...",
                 send_btn: "Send",
                 lang_label: "Interface Language",
-                upload_error: "Upload failed. Make sure you created a PUBLIC bucket named 'uploads' in Supabase Storage!"
+                upload_error: "Upload failed!"
             },
             ru: {
                 auth_title: "OBSCURE",
@@ -657,7 +656,7 @@
                 type_placeholder: "Напишите сообщение...",
                 send_btn: "Отправить",
                 lang_label: "Язык интерфейса",
-                upload_error: "Загрузка не удалась. Убедитесь, что вы создали ПУБЛИЧНЫЙ бакет с названием 'uploads' в Supabase Storage!"
+                upload_error: "Загрузка не удалась!"
             }
         };
 
@@ -687,6 +686,11 @@
         const btnSaveSettings = document.getElementById('btn-save-settings');
         const fileInput = document.getElementById('file-input');
         const avatarInput = document.getElementById('avatar-input');
+        
+        const chatPlaceholder = document.getElementById('chat-placeholder');
+        const chatArea = document.getElementById('chat-main');
+        const btnBack = document.getElementById('btn-back');
+        const sidebar = document.getElementById('sidebar');
 
         // --- Auth Logic ---
         async function handleAuth(type) {
@@ -697,32 +701,20 @@
             const errorEl = document.getElementById('auth-error');
 
             if (!username || !password) return;
-
-            // Proxy username to email for Supabase Auth (Invisible to user)
             const email = `${username}@obscure.app`;
             errorEl.style.display = 'none';
 
             let result;
-            if (type === 'signup') {
-                result = await _supabase.auth.signUp({ email, password });
-            } else {
-                result = await _supabase.auth.signInWithPassword({ email, password });
-            }
+            if (type === 'signup') result = await _supabase.auth.signUp({ email, password });
+            else result = await _supabase.auth.signInWithPassword({ email, password });
 
             if (result.error) {
-                if (result.error.message.includes("Email not confirmed")) {
-                    errorEl.innerHTML = `Login error: User exists but not confirmed.<br>Run the FIX script in Supabase SQL Editor!`;
-                } else {
-                    errorEl.innerText = result.error.message;
-                }
+                errorEl.innerText = result.error.message;
                 errorEl.style.display = 'block';
             } else {
-                // Ensure profile exists (Auto-repair if SQL trigger wasn't run)
                 await ensureProfileExists(result.data.user.id, username);
-
                 if (type === 'signup' && !result.data.session) {
-                    errorEl.innerHTML = "Account created!<br>Run the FIX script in Supabase to log in.";
-                    errorEl.style.color = "#4ade80";
+                    errorEl.innerText = "Account created! Check mail or use SQL fix.";
                     errorEl.style.display = 'block';
                 } else {
                     currentUser = result.data.user;
@@ -733,38 +725,30 @@
 
         async function ensureProfileExists(id, username) {
             const { data: profile } = await _supabase.from('profiles').select('*').eq('id', id).single();
-            if (!profile) {
-                await _supabase.from('profiles').insert({ id, username });
-            }
+            if (!profile) await _supabase.from('profiles').insert({ id, username });
         }
 
         async function showMessenger() {
             authScreen.style.display = 'none';
             messengerScreen.style.display = 'flex';
-            
             updateMeUI();
             updateLanguageUI();
             loadContacts();
 
-            // Subscribe to real-time messages
             _supabase.channel('messages')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
                     const msg = payload.new;
-                    // Notification Logic
                     if (msg.sender_id !== currentUser.id) {
                         const sound = document.getElementById('notif-sound');
                         if (sound) sound.play().catch(() => {});
-                        
                         if (!activeChat || (msg.group_id ? msg.group_id !== activeChat.id : msg.sender_id !== activeChat.id)) {
                             const key = msg.group_id || msg.sender_id;
                             unreadCounts[key] = (unreadCounts[key] || 0) + 1;
                             updateTabTitle();
                         }
                     }
-
                     if (activeChat && (msg.group_id ? msg.group_id === activeChat.id : (msg.sender_id === activeChat.id || msg.receiver_id === activeChat.id))) {
-                        const existing = document.getElementById(`msg-${msg.id}`);
-                        if (!existing) appendMessage(msg);
+                        appendMessage(msg);
                     }
                     loadContacts();
                 })
@@ -781,65 +765,23 @@
             if (profile) {
                 const name = profile.display_name || profile.username;
                 document.getElementById('my-username').innerText = name;
-                const avatarEl = document.getElementById('my-avatar');
-                if (profile.avatar_url) {
-                    avatarEl.innerHTML = `<img src="${profile.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;" onerror="this.parentElement.innerText='${name[0].toUpperCase()}'; this.remove();">`;
-                } else {
-                    avatarEl.innerText = name[0].toUpperCase();
-                }
+                const av = document.getElementById('my-avatar');
+                if (profile.avatar_url) av.innerHTML = `<img src="${profile.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+                else av.innerText = name[0].toUpperCase();
 
-                // Pre-fill settings
                 document.getElementById('set-username').value = profile.username;
                 document.getElementById('set-display-name').value = profile.display_name || '';
-                const preview = document.getElementById('set-avatar-preview');
-                if (profile.avatar_url) {
-                    preview.innerHTML = `<img src="${profile.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;" onerror="this.parentElement.innerText='${profile.username[0].toUpperCase()}'; this.remove();">`;
-                } else {
-                    preview.innerText = profile.username[0].toUpperCase();
-                }
             }
             updateLanguageUI();
         }
 
         function updateLanguageUI() {
             const t = translations[currentLang];
-            
-            // Auth Screen
-            document.querySelector('#auth-screen h1').innerText = t.auth_title;
-            document.querySelector('#auth-screen .subtitle').innerText = t.auth_subtitle;
-            document.getElementById('username').placeholder = t.login_id;
-            document.getElementById('password').placeholder = t.password;
-            document.getElementById('btn-login').innerText = t.login_btn;
-            document.getElementById('btn-signup').innerText = t.signup_btn;
-
-            // Sidebar
             document.getElementById('user-search').placeholder = t.search_placeholder;
             document.getElementById('btn-logout').innerText = t.logout_btn;
-            document.querySelector('.me-info p').innerText = t.online;
-
-            // Settings
-            document.querySelector('#settings-modal h2').innerText = t.settings_title;
-            document.querySelector('#settings-modal label[id="lbl-avatar"]').innerText = t.profile_avatar;
-            document.querySelector('#settings-modal button[onclick*="avatar-input"]').innerText = t.upload_btn;
-            document.querySelector('#settings-modal label[id="lbl-username"]').innerText = t.username_label;
-            document.getElementById('set-username').placeholder = t.login_id;
-            document.querySelector('#settings-modal label[id="lbl-display-name"]').innerText = t.display_name_label;
-            document.getElementById('set-display-name').placeholder = t.display_name_label;
-            document.getElementById('lbl-lang').innerText = t.lang_label;
-            document.getElementById('lbl-password').innerText = t.password_label;
-            document.getElementById('set-password').placeholder = t.password_label;
-            document.getElementById('btn-save-settings').innerText = t.save_btn;
-
-            // Chat
             document.getElementById('message-input').placeholder = t.type_placeholder;
             document.getElementById('btn-send').innerText = t.send_btn;
-            if (activeChat?.isSaved) document.getElementById('current-chat-name').innerText = t.saved_messages;
-            if (document.getElementById('current-chat-status')) {
-                document.getElementById('current-chat-status').innerText = t.active_now;
-            }
-            
-            document.getElementById('set-lang').value = currentLang;
-            loadContacts(); // Refresh "Saved Messages" tag
+            loadContacts();
         }
 
         function changeLang(lang) {
@@ -848,13 +790,12 @@
             updateLanguageUI();
         }
 
-        // --- Encryption Helpers ---
         async function encrypt(text) {
             if (!isSecretMode || !secretKey) return text;
-            return "[Secret]" + btoa(text); // Simple for demo, can be AES
+            return "[Secret]" + btoa(text);
         }
         function decrypt(text) {
-            if (text.startsWith("[Secret]")) {
+            if (text && text.startsWith("[Secret]")) {
                 try { return atob(text.replace("[Secret]", "")); } catch { return "[Encrypted]"; }
             }
             return text;
@@ -864,153 +805,66 @@
             activeChat = chat;
             if (chat.id) unreadCounts[chat.id] = 0;
             updateTabTitle();
-            
             chatPlaceholder.style.display = 'none';
             chatArea.style.display = 'flex';
-            
-            const name = chat.isSaved ? 'Saved Messages' : (chat.display_name || chat.username || chat.name);
-            document.getElementById('current-chat-name').innerText = name;
-            const avatarEl = document.getElementById('current-chat-avatar');
-            
-            if (chat.isSaved) {
-                avatarEl.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
-                avatarEl.style.background = 'var(--accent)';
-            } else if (chat.avatar_url) {
-                avatarEl.innerHTML = `<img src="${chat.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">`;
-            } else {
-                avatarEl.innerText = name ? name[0].toUpperCase() : '?';
-                avatarEl.style.background = chat.name ? 'var(--accent-soft)' : getAvatarColor(name);
-            }
-            
+            document.getElementById('current-chat-name').innerText = chat.isSaved ? translations[currentLang].saved_messages : (chat.display_name || chat.username || chat.name);
             loadMessages();
             loadContacts();
             if (window.innerWidth <= 768) sidebar.classList.add('hidden');
         }
 
         async function loadContacts() {
-            // DMs
-            const { data: messages } = await _supabase.from('messages').select('sender_id, receiver_id').or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
-            const contactIds = new Set();
-            if (messages) messages.forEach(m => {
-                if (m.sender_id && m.sender_id !== currentUser.id) contactIds.add(m.sender_id);
-                if (m.receiver_id && m.receiver_id !== currentUser.id) contactIds.add(m.receiver_id);
-            });
-            const { data: profiles } = await _supabase.from('profiles').select('*').in('id', Array.from(contactIds));
-            
-            // Groups
+            const { data: profiles } = await _supabase.from('profiles').select('*');
             const { data: groups } = await _supabase.from('groups').select('*, group_members!inner(*)').eq('group_members.user_id', currentUser.id);
-            renderContacts(profiles || [], groups || []);
+            renderContacts(profiles.filter(p => p.id !== currentUser.id), groups || []);
         }
 
         function renderContacts(profiles, groups) {
             const t = translations[currentLang];
             contactList.innerHTML = '';
-            
-            // 1. Saved Messages
-            const savedItem = document.createElement('div');
-            savedItem.className = `contact-item ${activeChat?.isSaved ? 'active' : ''}`;
-            const unreadSaved = unreadCounts[currentUser.id] || 0;
-            savedItem.innerHTML = `
-                <div class="avatar" style="background: var(--accent);">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <div class="contact-info">
-                    <div class="contact-name">${t.saved_messages} <span class="saved-tag">Self</span></div>
-                    <div class="contact-status">${t.cloud_storage}</div>
-                </div>
-                ${unreadSaved > 0 ? `<div class="unread-badge">${unreadSaved}</div>` : ''}
-            `;
-            savedItem.onclick = () => selectChat({ id: currentUser.id, username: 'SavedMessages', isSaved: true });
-            contactList.appendChild(savedItem);
 
-            // 2. Channels
-            const channels = groups.filter(g => g.is_channel);
-            if (channels.length > 0) {
-                const header = document.createElement('div');
-                header.className = 'contact-header';
-                header.innerText = 'CHANNELS';
-                header.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
-                contactList.appendChild(header);
-                
-                channels.forEach(g => {
-                    const item = document.createElement('div');
-                    item.className = `contact-item ${activeChat?.id === g.id ? 'active' : ''}`;
-                    const unread = unreadCounts[g.id] || 0;
-                    item.innerHTML = `
-                        <div class="avatar" style="background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);">📣</div>
-                        <div class="contact-info">
-                            <div class="contact-name">${g.name} <span class="group-tag" style="background: var(--accent);">Channel</span></div>
-                            <div class="contact-status">Public channel</div>
-                        </div>
-                        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
-                    `;
-                    item.onclick = () => selectChat(g);
-                    contactList.appendChild(item);
-                });
-            }
+            // Saved Messages
+            const saved = document.createElement('div');
+            saved.className = 'contact-item';
+            saved.innerHTML = `<div class="avatar" style="background:var(--accent);">💾</div><div class="contact-info"><div class="contact-name">${t.saved_messages}</div></div>`;
+            saved.onclick = () => selectChat({ id: currentUser.id, isSaved: true });
+            contactList.appendChild(saved);
 
-            // 3. Groups
-            const privateGroups = groups.filter(g => !g.is_channel);
-            if (privateGroups.length > 0) {
-                const header = document.createElement('div');
-                header.className = 'contact-header';
-                header.innerText = 'GROUPS';
-                header.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
-                contactList.appendChild(header);
+            // Channels
+            groups.filter(g => g.is_channel).forEach(g => {
+                const item = document.createElement('div');
+                item.className = 'contact-item';
+                item.innerHTML = `<div class="avatar" style="background:var(--accent-soft);color:var(--accent);">📣</div><div class="contact-info"><div class="contact-name">${g.name}</div><div class="contact-status">Channel</div></div>`;
+                item.onclick = () => selectChat(g);
+                contactList.appendChild(item);
+            });
 
-                privateGroups.forEach(g => {
-                    const item = document.createElement('div');
-                    item.className = `contact-item ${activeChat?.id === g.id ? 'active' : ''}`;
-                    const unread = unreadCounts[g.id] || 0;
-                    item.innerHTML = `
-                        <div class="avatar" style="background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);">G</div>
-                        <div class="contact-info">
-                            <div class="contact-name">${g.name} <span class="group-tag">Group</span></div>
-                            <div class="contact-status">Group chat</div>
-                        </div>
-                        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
-                    `;
-                    item.onclick = () => selectChat(g);
-                    contactList.appendChild(item);
-                });
-            }
+            // Groups
+            groups.filter(g => !g.is_channel).forEach(g => {
+                const item = document.createElement('div');
+                item.className = 'contact-item';
+                item.innerHTML = `<div class="avatar" style="background:var(--accent-soft);color:var(--accent);">👥</div><div class="contact-info"><div class="contact-name">${g.name}</div><div class="contact-status">Group</div></div>`;
+                item.onclick = () => selectChat(g);
+                contactList.appendChild(item);
+            });
 
-            // 4. Private Chats
-            if (profiles.length > 0) {
-                const header = document.createElement('div');
-                header.className = 'contact-header';
-                header.innerText = 'MESSAGES';
-                header.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
-                contactList.appendChild(header);
-
-                profiles.forEach(p => {
-                    const item = document.createElement('div');
-                    item.className = `contact-item ${activeChat?.id === p.id && !activeChat.isSaved ? 'active' : ''}`;
-                    const unread = unreadCounts[p.id] || 0;
-                    const name = p.display_name || p.username;
-                    item.innerHTML = `
-                        <div class="avatar" style="${p.avatar_url ? '' : 'background: ' + getAvatarColor(name)}">
-                            ${p.avatar_url ? `<img src="${p.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">` : name[0].toUpperCase()}
-                        </div>
-                        <div class="contact-info">
-                            <div class="contact-name">${name}</div>
-                            <div class="contact-status">${p.status}</div>
-                        </div>
-                        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
-                    `;
-                    item.onclick = () => selectChat(p);
-                    contactList.appendChild(item);
-                });
-            }
+            // Users
+            profiles.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'contact-item';
+                const unread = unreadCounts[p.id] || 0;
+                item.innerHTML = `<div class="avatar">${p.username[0].toUpperCase()}</div><div class="contact-info"><div class="contact-name">${p.display_name || p.username}</div></div>${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}`;
+                item.onclick = () => selectChat(p);
+                contactList.appendChild(item);
+            });
         }
 
         async function loadMessages() {
             messageFeed.innerHTML = '';
-            let q = _supabase.from('messages').select('*, profiles(username, display_name)').order('created_at', { ascending: true });
+            let q = _supabase.from('messages').select('*').order('created_at', { ascending: true });
             if (activeChat.isSaved) q = q.eq('sender_id', currentUser.id).eq('receiver_id', currentUser.id);
             else if (activeChat.name) q = q.eq('group_id', activeChat.id);
             else q = q.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${activeChat.id}),and(sender_id.eq.${activeChat.id},receiver_id.eq.${currentUser.id})`);
-            
             const { data } = await q;
             if (data) data.forEach(msg => appendMessage(msg));
             messageFeed.scrollTop = messageFeed.scrollHeight;
@@ -1020,121 +874,42 @@
             const isSent = msg.sender_id === currentUser.id;
             const div = document.createElement('div');
             div.className = `message ${isSent ? 'sent' : 'received'}`;
-            div.id = `msg-${msg.id}`;
-
-            let content = decrypt(msg.content || '');
-            if (msg.file_url) {
-                if (msg.file_type?.startsWith('image/')) content += `<img src="${msg.file_url}" onclick="window.open('${msg.file_url}')">`;
-                else if (msg.file_type?.startsWith('video/')) content += `<video src="${msg.file_url}" controls></video>`;
-                else content += `<a href="${msg.file_url}" target="_blank" class="file-link">📎 Download File</a>`;
-            }
-
-            const senderName = activeChat.name && !isSent ? `<div style="font-size: 0.7rem; color: var(--accent); margin-bottom: 4px; font-weight: 700;">${msg.profiles?.display_name || msg.profiles?.username}</div>` : '';
-
-            div.innerHTML = `
-                ${senderName}
-                ${content}
-                <div class="message-time">${new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-            `;
+            let content = decrypt(msg.content);
+            if (msg.file_url) content += `<br><img src="${msg.file_url}" style="max-width:200px;border-radius:10px;">`;
+            div.innerHTML = `${content}<div class="message-time">${new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>`;
             messageFeed.appendChild(div);
             messageFeed.scrollTop = messageFeed.scrollHeight;
         }
 
-        // --- Features Logic ---
         async function handleFileUpload(e) {
             const file = e.target.files[0];
             if (!file || !activeChat) return;
-
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `${currentUser.id}/${fileName}`;
-
-            const { data, error } = await _supabase.storage.from('uploads').upload(filePath, file);
-            if (error) {
-                alert(translations[currentLang].upload_error);
-                return;
-            }
-
-            const { data: { publicUrl } } = _supabase.storage.from('uploads').getPublicUrl(filePath);
-            
-            const msgObj = {
-                sender_id: currentUser.id,
-                file_url: publicUrl,
-                file_type: file.type
-            };
-            if (activeChat.name) msgObj.group_id = activeChat.id;
-            else msgObj.receiver_id = activeChat.id;
-
-            await _supabase.from('messages').insert(msgObj);
-        }
-
-        async function handleSaveSettings() {
-            const newUsername = document.getElementById('set-username').value.trim();
-            const newDisplayName = document.getElementById('set-display-name').value.trim();
-            const newPassword = document.getElementById('set-password').value;
-            const errorEl = document.getElementById('settings-error');
-            errorEl.style.display = 'none';
-
-            try {
-                if (newPassword) await _supabase.auth.updateUser({ password: newPassword });
-                const { data: currentProfile } = await _supabase.from('profiles').select('username').eq('id', currentUser.id).single();
-                if (newUsername && newUsername !== currentProfile.username) {
-                    await _supabase.auth.updateUser({ email: `${newUsername}@obscure.app` });
-                }
-                const { error: profErr } = await _supabase.from('profiles').update({
-                    username: newUsername,
-                    display_name: newDisplayName
-                }).eq('id', currentUser.id);
-                if (profErr) throw profErr;
-
-                closeModal('settings-modal');
-                updateMeUI();
-                loadContacts();
-            } catch (err) {
-                errorEl.innerText = err.message;
-                errorEl.style.display = 'block';
-            }
-        }
-
-        async function handleAvatarUpload(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const filePath = `avatars/${currentUser.id}`;
-            await _supabase.storage.from('uploads').upload(filePath, file, { upsert: true });
-            const { data: { publicUrl } } = _supabase.storage.from('uploads').getPublicUrl(filePath);
-            await _supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', currentUser.id);
-            updateMeUI();
+            const path = `${currentUser.id}/${Date.now()}_${file.name}`;
+            await _supabase.storage.from('uploads').upload(path, file);
+            const { data: { publicUrl } } = _supabase.storage.from('uploads').getPublicUrl(path);
+            const msg = { sender_id:currentUser.id, file_url:publicUrl };
+            if (activeChat.name) msg.group_id = activeChat.id; else msg.receiver_id = activeChat.id;
+            await _supabase.from('messages').insert(msg);
         }
 
         async function handleCreateGroup(isChannel = false) {
             const name = document.getElementById('group-name').value.trim();
             const memberId = document.getElementById('group-member-id').value.trim();
             if (!name) return;
-            const { data: group, error } = await _supabase.from('groups').insert({ 
-                name, owner_id: currentUser.id, is_channel: isChannel
-            }).select().single();
+            const { data: group } = await _supabase.from('groups').insert({ name, owner_id: currentUser.id, is_channel: isChannel }).select().single();
             if (group) {
                 const members = [{ group_id: group.id, user_id: currentUser.id }];
                 if (memberId) members.push({ group_id: group.id, user_id: memberId });
                 await _supabase.from('group_members').insert(members);
-                
                 closeModal('group-modal');
-                document.getElementById('group-name').value = '';
-                document.getElementById('group-member-id').value = '';
                 selectChat(group);
-            } else alert(error.message);
+            }
         }
 
         function toggleSecretChat() {
             isSecretMode = !isSecretMode;
-            if (isSecretMode) {
-                secretKey = prompt("Enter Secret Key for this session:");
-                if (!secretKey) isSecretMode = false;
-            }
-            const btn = document.getElementById('btn-secret-chat');
-            btn.style.color = isSecretMode ? 'var(--accent)' : 'white';
-            btn.style.borderColor = isSecretMode ? 'var(--accent)' : 'var(--glass-border)';
-            alert(isSecretMode ? "Secret Mode ON (Basic Encryption)" : "Secret Mode OFF");
+            if (isSecretMode) secretKey = prompt("Secret Key:");
+            alert(isSecretMode ? "Secret Mode ON" : "Secret Mode OFF");
         }
 
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
@@ -1144,9 +919,14 @@
         signupBtn.onclick = () => handleAuth('signup');
         logoutBtn.onclick = async () => { await _supabase.auth.signOut(); window.location.reload(); };
         btnSettings.onclick = () => openModal('settings-modal');
-        btnSaveSettings.onclick = handleSaveSettings;
+        btnSaveSettings.onclick = async () => {
+            const username = document.getElementById('set-username').value;
+            const display_name = document.getElementById('set-display-name').value;
+            await _supabase.from('profiles').update({ username, display_name }).eq('id', currentUser.id);
+            closeModal('settings-modal');
+            updateMeUI();
+        };
         fileInput.onchange = handleFileUpload;
-        avatarInput.onchange = handleAvatarUpload;
         document.getElementById('btn-new-group').onclick = () => {
             document.getElementById('modal-group-title').innerText = 'Create Group';
             document.getElementById('group-members-row').style.display = 'block';
@@ -1160,26 +940,17 @@
             openModal('group-modal');
         };
         document.getElementById('btn-secret-chat').onclick = toggleSecretChat;
-
-        userSearch.onkeypress = async (e) => {
-            if (e.key === 'Enter') {
-                const query = userSearch.value.trim();
-                const { data } = await _supabase.from('profiles').select('*').ilike('username', query).single();
-                if (data) { selectChat(data); userSearch.value = ''; }
-                else alert("User not found.");
-            }
-        };
+        btnBack.onclick = () => sidebar.classList.remove('hidden');
 
         messageForm.onsubmit = async (e) => {
             e.preventDefault();
             const text = messageInput.value.trim();
             if (!text || !activeChat) return;
-            const encrypted = await encrypt(text);
-            const msgObj = { sender_id: currentUser.id, content: encrypted };
-            if (activeChat.name) msgObj.group_id = activeChat.id;
-            else msgObj.receiver_id = activeChat.id;
-            const { error } = await _supabase.from('messages').insert(msgObj);
-            if (!error) messageInput.value = '';
+            const content = await encrypt(text);
+            const msg = { sender_id: currentUser.id, content };
+            if (activeChat.name) msg.group_id = activeChat.id; else msg.receiver_id = activeChat.id;
+            await _supabase.from('messages').insert(msg);
+            messageInput.value = '';
         };
 
         _supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1188,9 +959,4 @@
         });
     </script>
 </body>
-</html>
-        });
-    </script>
-</body>
-
 </html>
