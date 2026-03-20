@@ -472,10 +472,13 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     </div>
                 </div>
-                <div class="sidebar-search" style="display: flex; gap: 8px;">
-                    <input type="text" id="user-search" placeholder="Find user by ID..." style="flex: 1;">
-                    <button id="btn-new-group" class="secondary" style="width: 44px; height: 44px; padding: 0; border-radius: 12px; margin: 0; display: flex; align-items: center; justify-content: center;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <div class="sidebar-search" style="display: flex; gap: 6px;">
+                    <input type="text" id="user-search" placeholder="Find by ID..." style="flex: 1; padding: 10px 12px; font-size: 0.85rem;">
+                    <button id="btn-new-channel" class="secondary" title="New Channel" style="width: 38px; height: 38px; padding: 0; border-radius: 10px; margin: 0; display: flex; align-items: center; justify-content: center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    </button>
+                    <button id="btn-new-group" class="secondary" title="New Group" style="width: 38px; height: 38px; padding: 0; border-radius: 10px; margin: 0; display: flex; align-items: center; justify-content: center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     </button>
                 </div>
                 <div class="contact-list" id="contact-list">
@@ -570,6 +573,31 @@
             <div id="settings-error" style="color: #ef4444; font-size: 0.8rem; margin-top: 12px; display: none;"></div>
         </div>
     </div>
+    
+    <!-- Group Modal -->
+    <div class="modal-overlay" id="group-modal">
+        <div class="modal-card">
+            <div class="modal-close" onclick="closeModal('group-modal')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </div>
+            <h2 id="modal-group-title" style="margin-bottom: 24px;">Create Group</h2>
+            
+            <div class="form-row">
+                <label>Group/Channel Name</label>
+                <input type="text" id="group-name" placeholder="Enter name...">
+            </div>
+
+            <div class="form-row" id="group-members-row">
+                <label>Add Member (User ID)</label>
+                <input type="text" id="group-member-id" placeholder="Optional User ID">
+            </div>
+
+            <button id="btn-create-group">Create Now</button>
+        </div>
+    </div>
+
+    <!-- Notification Sound -->
+    <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
 
     <script>
         // --- Supabase Config ---
@@ -895,42 +923,85 @@
             savedItem.onclick = () => selectChat({ id: currentUser.id, username: 'SavedMessages', isSaved: true });
             contactList.appendChild(savedItem);
 
-            // 2. Groups
-            groups.forEach(g => {
-                const item = document.createElement('div');
-                item.className = `contact-item ${activeChat?.id === g.id ? 'active' : ''}`;
-                const unread = unreadCounts[g.id] || 0;
-                item.innerHTML = `
-                    <div class="avatar" style="background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);">G</div>
-                    <div class="contact-info">
-                        <div class="contact-name">${g.name} <span class="group-tag">Group</span></div>
-                        <div class="contact-status">Group chat</div>
-                    </div>
-                    ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
-                `;
-                item.onclick = () => selectChat(g);
-                contactList.appendChild(item);
-            });
+            // 2. Channels
+            const channels = groups.filter(g => g.is_channel);
+            if (channels.length > 0) {
+                const header = document.createElement('div');
+                header.className = 'contact-header';
+                header.innerText = 'CHANNELS';
+                header.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
+                contactList.appendChild(header);
+                
+                channels.forEach(g => {
+                    const item = document.createElement('div');
+                    item.className = `contact-item ${activeChat?.id === g.id ? 'active' : ''}`;
+                    const unread = unreadCounts[g.id] || 0;
+                    item.innerHTML = `
+                        <div class="avatar" style="background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);">📣</div>
+                        <div class="contact-info">
+                            <div class="contact-name">${g.name} <span class="group-tag" style="background: var(--accent);">Channel</span></div>
+                            <div class="contact-status">Public channel</div>
+                        </div>
+                        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
+                    `;
+                    item.onclick = () => selectChat(g);
+                    contactList.appendChild(item);
+                });
+            }
 
-            // 3. Profiles
-            profiles.forEach(p => {
-                const item = document.createElement('div');
-                item.className = `contact-item ${activeChat?.id === p.id && !activeChat.isSaved ? 'active' : ''}`;
-                const unread = unreadCounts[p.id] || 0;
-                const name = p.display_name || p.username;
-                item.innerHTML = `
-                    <div class="avatar" style="${p.avatar_url ? '' : 'background: ' + getAvatarColor(name)}">
-                        ${p.avatar_url ? `<img src="${p.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">` : name[0].toUpperCase()}
-                    </div>
-                    <div class="contact-info">
-                        <div class="contact-name">${name}</div>
-                        <div class="contact-status">${p.status}</div>
-                    </div>
-                    ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
-                `;
-                item.onclick = () => selectChat(p);
-                contactList.appendChild(item);
-            });
+            // 3. Groups
+            const privateGroups = groups.filter(g => !g.is_channel);
+            if (privateGroups.length > 0) {
+                const header = document.createElement('div');
+                header.className = 'contact-header';
+                header.innerText = 'GROUPS';
+                header.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
+                contactList.appendChild(header);
+
+                privateGroups.forEach(g => {
+                    const item = document.createElement('div');
+                    item.className = `contact-item ${activeChat?.id === g.id ? 'active' : ''}`;
+                    const unread = unreadCounts[g.id] || 0;
+                    item.innerHTML = `
+                        <div class="avatar" style="background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);">G</div>
+                        <div class="contact-info">
+                            <div class="contact-name">${g.name} <span class="group-tag">Group</span></div>
+                            <div class="contact-status">Group chat</div>
+                        </div>
+                        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
+                    `;
+                    item.onclick = () => selectChat(g);
+                    contactList.appendChild(item);
+                });
+            }
+
+            // 4. Private Chats
+            if (profiles.length > 0) {
+                const header = document.createElement('div');
+                header.className = 'contact-header';
+                header.innerText = 'MESSAGES';
+                header.style = 'font-size: 0.65rem; color: var(--accent); padding: 12px 16px 4px; font-weight: 800; letter-spacing: 1px;';
+                contactList.appendChild(header);
+
+                profiles.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = `contact-item ${activeChat?.id === p.id && !activeChat.isSaved ? 'active' : ''}`;
+                    const unread = unreadCounts[p.id] || 0;
+                    const name = p.display_name || p.username;
+                    item.innerHTML = `
+                        <div class="avatar" style="${p.avatar_url ? '' : 'background: ' + getAvatarColor(name)}">
+                            ${p.avatar_url ? `<img src="${p.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">` : name[0].toUpperCase()}
+                        </div>
+                        <div class="contact-info">
+                            <div class="contact-name">${name}</div>
+                            <div class="contact-status">${p.status}</div>
+                        </div>
+                        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
+                    `;
+                    item.onclick = () => selectChat(p);
+                    contactList.appendChild(item);
+                });
+            }
         }
 
         async function loadMessages() {
@@ -1035,12 +1106,12 @@
             updateMeUI();
         }
 
-        async function handleCreateGroup() {
+        async function handleCreateGroup(isChannel = false) {
             const name = document.getElementById('group-name').value.trim();
             const memberId = document.getElementById('group-member-id').value.trim();
             if (!name) return;
             const { data: group, error } = await _supabase.from('groups').insert({ 
-                name, owner_id: currentUser.id 
+                name, owner_id: currentUser.id, is_channel: isChannel
             }).select().single();
             if (group) {
                 const members = [{ group_id: group.id, user_id: currentUser.id }];
@@ -1076,7 +1147,18 @@
         btnSaveSettings.onclick = handleSaveSettings;
         fileInput.onchange = handleFileUpload;
         avatarInput.onchange = handleAvatarUpload;
-        document.getElementById('btn-new-group').onclick = () => openModal('group-modal');
+        document.getElementById('btn-new-group').onclick = () => {
+            document.getElementById('modal-group-title').innerText = 'Create Group';
+            document.getElementById('group-members-row').style.display = 'block';
+            document.getElementById('btn-create-group').onclick = () => handleCreateGroup(false);
+            openModal('group-modal');
+        };
+        document.getElementById('btn-new-channel').onclick = () => {
+            document.getElementById('modal-group-title').innerText = 'Create Channel';
+            document.getElementById('group-members-row').style.display = 'none';
+            document.getElementById('btn-create-group').onclick = () => handleCreateGroup(true);
+            openModal('group-modal');
+        };
         document.getElementById('btn-secret-chat').onclick = toggleSecretChat;
 
         userSearch.onkeypress = async (e) => {
@@ -1107,13 +1189,6 @@
     </script>
 </body>
 </html>
-.auth.getSession().then(({ data: { session } }) => {
-            if (session) { 
-                currentUser = session.user; 
-                showMessenger(); 
-            } else {
-                updateLanguageUI(); // Initial translation for auth screen
-            }
         });
     </script>
 </body>
