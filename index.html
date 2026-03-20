@@ -482,7 +482,7 @@
                         <div class="contact-name" id="current-chat-name">Unknown</div>
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <div class="active-dot"></div>
-                            <div class="contact-status" style="color: #4ade80;">Active now</div>
+                            <div class="contact-status" id="current-chat-status" style="color: #4ade80;">Active now</div>
                         </div>
                     </div>
                 </div>
@@ -510,7 +510,7 @@
             <h2 style="margin-bottom: 24px;">Settings</h2>
             
             <div class="form-row">
-                <label>Profile Avatar</label>
+                <label id="lbl-avatar">Profile Avatar</label>
                 <div style="display: flex; align-items: center; gap: 16px;">
                     <div class="me-avatar" id="set-avatar-preview" style="width: 64px; height: 64px;">?</div>
                     <button class="secondary" onclick="document.getElementById('avatar-input').click()" style="width: auto; margin: 0; padding: 10px 20px;">Upload</button>
@@ -519,17 +519,25 @@
             </div>
 
             <div class="form-row">
-                <label>Login ID (Username)</label>
+                <label id="lbl-username">Login ID (Username)</label>
                 <input type="text" id="set-username" placeholder="New login ID">
             </div>
 
             <div class="form-row">
-                <label>Display Name</label>
+                <label id="lbl-display-name">Display Name</label>
                 <input type="text" id="set-display-name" placeholder="Public name">
             </div>
 
             <div class="form-row">
-                <label>Change Password</label>
+                <label id="lbl-lang">Interface Language</label>
+                <select id="set-lang" onchange="changeLang(this.value)" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; color: white;">
+                    <option value="en">English</option>
+                    <option value="ru">Русский</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <label id="lbl-password">Change Password</label>
                 <input type="password" id="set-password" placeholder="New password (blank to keep)">
             </div>
 
@@ -545,6 +553,62 @@
         const SUPABASE_KEY = 'sb_publishable_03Ep--VuOU3PTtguDDXXxA_fbgD8F8p';
 
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- Translations ---
+        const translations = {
+            en: {
+                auth_title: "OBSCURE",
+                auth_subtitle: "Enter the shadows of communication.",
+                login_id: "Login ID",
+                password: "Password",
+                login_btn: "Login",
+                signup_btn: "Create Account",
+                settings_title: "Settings",
+                profile_avatar: "Profile Avatar",
+                upload_btn: "Upload",
+                username_label: "Login ID (Username)",
+                display_name_label: "Display Name",
+                password_label: "Change Password",
+                save_btn: "Save All Changes",
+                logout_btn: "Logout Account",
+                search_placeholder: "Find user by ID...",
+                saved_messages: "Saved Messages",
+                cloud_storage: "Cloud storage",
+                online: "Online",
+                active_now: "Active now",
+                type_placeholder: "Type a message...",
+                send_btn: "Send",
+                lang_label: "Interface Language",
+                upload_error: "Upload failed. Make sure you created a PUBLIC bucket named 'uploads' in Supabase Storage!"
+            },
+            ru: {
+                auth_title: "OBSCURE",
+                auth_subtitle: "Войдите в тени общения.",
+                login_id: "ID входа",
+                password: "Пароль",
+                login_btn: "Войти",
+                signup_btn: "Создать аккаунт",
+                settings_title: "Настройки",
+                profile_avatar: "Аватар профиля",
+                upload_btn: "Загрузить",
+                username_label: "Имя пользователя (ID)",
+                display_name_label: "Отображаемое имя",
+                password_label: "Сменить пароль",
+                save_btn: "Сохранить изменения",
+                logout_btn: "Выйти из аккаунта",
+                search_placeholder: "Найти по ID...",
+                saved_messages: "Избранное",
+                cloud_storage: "Облачное хранилище",
+                online: "В сети",
+                active_now: "В сети",
+                type_placeholder: "Напишите сообщение...",
+                send_btn: "Отправить",
+                lang_label: "Язык интерфейса",
+                upload_error: "Загрузка не удалась. Убедитесь, что вы создали ПУБЛИЧНЫЙ бакет с названием 'uploads' в Supabase Storage!"
+            }
+        };
+
+        let currentLang = localStorage.getItem('messenger_lang') || 'en';
 
         // --- State ---
         let currentUser = null;
@@ -623,6 +687,7 @@
             messengerScreen.style.display = 'flex';
             
             updateMeUI();
+            updateLanguageUI();
             loadContacts();
 
             // Subscribe to real-time messages
@@ -645,7 +710,7 @@
                 document.getElementById('my-username').innerText = name;
                 const avatarEl = document.getElementById('my-avatar');
                 if (profile.avatar_url) {
-                    avatarEl.innerHTML = `<img src="${profile.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">`;
+                    avatarEl.innerHTML = `<img src="${profile.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;" onerror="this.parentElement.innerText='${name[0].toUpperCase()}'; this.remove();">`;
                 } else {
                     avatarEl.innerText = name[0].toUpperCase();
                 }
@@ -655,11 +720,59 @@
                 document.getElementById('set-display-name').value = profile.display_name || '';
                 const preview = document.getElementById('set-avatar-preview');
                 if (profile.avatar_url) {
-                    preview.innerHTML = `<img src="${profile.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">`;
+                    preview.innerHTML = `<img src="${profile.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;" onerror="this.parentElement.innerText='${profile.username[0].toUpperCase()}'; this.remove();">`;
                 } else {
                     preview.innerText = profile.username[0].toUpperCase();
                 }
             }
+            updateLanguageUI();
+        }
+
+        function updateLanguageUI() {
+            const t = translations[currentLang];
+            
+            // Auth Screen
+            document.querySelector('#auth-screen h1').innerText = t.auth_title;
+            document.querySelector('#auth-screen .subtitle').innerText = t.auth_subtitle;
+            document.getElementById('username').placeholder = t.login_id;
+            document.getElementById('password').placeholder = t.password;
+            document.getElementById('btn-login').innerText = t.login_btn;
+            document.getElementById('btn-signup').innerText = t.signup_btn;
+
+            // Sidebar
+            document.getElementById('user-search').placeholder = t.search_placeholder;
+            document.getElementById('btn-logout').innerText = t.logout_btn;
+            document.querySelector('.me-info p').innerText = t.online;
+
+            // Settings
+            document.querySelector('#settings-modal h2').innerText = t.settings_title;
+            document.querySelector('#settings-modal label[id="lbl-avatar"]').innerText = t.profile_avatar;
+            document.querySelector('#settings-modal button[onclick*="avatar-input"]').innerText = t.upload_btn;
+            document.querySelector('#settings-modal label[id="lbl-username"]').innerText = t.username_label;
+            document.getElementById('set-username').placeholder = t.login_id;
+            document.querySelector('#settings-modal label[id="lbl-display-name"]').innerText = t.display_name_label;
+            document.getElementById('set-display-name').placeholder = t.display_name_label;
+            document.getElementById('lbl-lang').innerText = t.lang_label;
+            document.getElementById('lbl-password').innerText = t.password_label;
+            document.getElementById('set-password').placeholder = t.password_label;
+            document.getElementById('btn-save-settings').innerText = t.save_btn;
+
+            // Chat
+            document.getElementById('message-input').placeholder = t.type_placeholder;
+            document.getElementById('btn-send').innerText = t.send_btn;
+            if (activeChat?.isSaved) document.getElementById('current-chat-name').innerText = t.saved_messages;
+            if (document.getElementById('current-chat-status')) {
+                document.getElementById('current-chat-status').innerText = t.active_now;
+            }
+            
+            document.getElementById('set-lang').value = currentLang;
+            loadContacts(); // Refresh "Saved Messages" tag
+        }
+
+        function changeLang(lang) {
+            currentLang = lang;
+            localStorage.setItem('messenger_lang', lang);
+            updateLanguageUI();
         }
 
         async function loadContacts() {
@@ -675,6 +788,7 @@
         }
 
         function renderContacts(profiles) {
+            const t = translations[currentLang];
             contactList.innerHTML = '';
             
             // Add "Saved Messages"
@@ -685,8 +799,8 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 </div>
                 <div class="contact-info">
-                    <div class="contact-name">Saved Messages <span class="saved-tag">Self</span></div>
-                    <div class="contact-status">Cloud storage</div>
+                    <div class="contact-name">${t.saved_messages} <span class="saved-tag">Self</span></div>
+                    <div class="contact-status">${t.cloud_storage}</div>
                 </div>
             `;
             savedItem.onclick = () => selectChat({ id: currentUser.id, username: 'SavedMessages', isSaved: true });
@@ -778,7 +892,7 @@
 
             const { data, error } = await _supabase.storage.from('uploads').upload(filePath, file);
             if (error) {
-                alert("Upload failed. Make sure you created a PUBLIC bucket named 'uploads' in Supabase Storage!");
+                alert(translations[currentLang].upload_error);
                 return;
             }
 
@@ -873,7 +987,12 @@
         };
 
         _supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) { currentUser = session.user; showMessenger(); }
+            if (session) { 
+                currentUser = session.user; 
+                showMessenger(); 
+            } else {
+                updateLanguageUI(); // Initial translation for auth screen
+            }
         });
     </script>
 </body>
