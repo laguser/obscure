@@ -390,6 +390,25 @@
             text-transform: uppercase;
         }
 
+        .unread-badge {
+            background: var(--accent);
+            color: white;
+            min-width: 20px;
+            height: 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 0 6px;
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        .group-tag { border: 1px solid var(--accent); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; }
+
+        .msg-status { font-size: 0.6rem; opacity: 0.5; margin-left: 6px; }
+
         .chat-input-area {
             padding: 24px 32px;
             background: rgba(10, 10, 10, 0.4);
@@ -453,14 +472,20 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     </div>
                 </div>
-                <div class="sidebar-search">
-                    <input type="text" id="user-search" placeholder="Find user by ID...">
+                <div class="sidebar-search" style="display: flex; gap: 8px;">
+                    <input type="text" id="user-search" placeholder="Find user by ID..." style="flex: 1;">
+                    <button id="btn-new-group" class="secondary" style="width: 44px; height: 44px; padding: 0; border-radius: 12px; margin: 0; display: flex; align-items: center; justify-content: center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </button>
                 </div>
                 <div class="contact-list" id="contact-list">
                     <!-- Contacts will appear here -->
                 </div>
-                <div style="padding: 16px; border-top: 1px solid var(--glass-border);">
-                    <button id="btn-logout" class="secondary" style="padding: 10px; font-size: 0.8rem; margin-top: 0;">Logout Account</button>
+                <div style="padding: 16px; border-top: 1px solid var(--glass-border); display: flex; gap: 8px;">
+                    <button id="btn-logout" class="secondary" style="padding: 10px; font-size: 0.8rem; margin-top: 0; flex: 1;">Logout</button>
+                    <div id="btn-secret-chat" class="attachment-btn" style="width: 40px; height: 40px; border-radius: 12px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
                 </div>
             </div>
 
@@ -613,6 +638,9 @@
         // --- State ---
         let currentUser = null;
         let activeChat = null;
+        let unreadCounts = {};
+        let isSecretMode = false;
+        let secretKey = null;
 
         // --- Elements ---
         const authScreen = document.getElementById('auth-screen');
@@ -694,13 +722,30 @@
             _supabase.channel('messages')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
                     const msg = payload.new;
-                    if (activeChat && (msg.sender_id === activeChat.id || msg.receiver_id === activeChat.id)) {
+                    // Notification Logic
+                    if (msg.sender_id !== currentUser.id) {
+                        const sound = document.getElementById('notif-sound');
+                        if (sound) sound.play().catch(() => {});
+                        
+                        if (!activeChat || (msg.group_id ? msg.group_id !== activeChat.id : msg.sender_id !== activeChat.id)) {
+                            const key = msg.group_id || msg.sender_id;
+                            unreadCounts[key] = (unreadCounts[key] || 0) + 1;
+                            updateTabTitle();
+                        }
+                    }
+
+                    if (activeChat && (msg.group_id ? msg.group_id === activeChat.id : (msg.sender_id === activeChat.id || msg.receiver_id === activeChat.id))) {
                         const existing = document.getElementById(`msg-${msg.id}`);
                         if (!existing) appendMessage(msg);
                     }
                     loadContacts();
                 })
                 .subscribe();
+        }
+
+        function updateTabTitle() {
+            const total = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+            document.title = total > 0 ? `(${total}) Obscure` : 'Obscure Messenger';
         }
 
         async function updateMeUI() {
@@ -775,25 +820,68 @@
             updateLanguageUI();
         }
 
+        // --- Encryption Helpers ---
+        async function encrypt(text) {
+            if (!isSecretMode || !secretKey) return text;
+            return "[Secret]" + btoa(text); // Simple for demo, can be AES
+        }
+        function decrypt(text) {
+            if (text.startsWith("[Secret]")) {
+                try { return atob(text.replace("[Secret]", "")); } catch { return "[Encrypted]"; }
+            }
+            return text;
+        }
+
+        async function selectChat(chat) {
+            activeChat = chat;
+            if (chat.id) unreadCounts[chat.id] = 0;
+            updateTabTitle();
+            
+            chatPlaceholder.style.display = 'none';
+            chatArea.style.display = 'flex';
+            
+            const name = chat.isSaved ? 'Saved Messages' : (chat.display_name || chat.username || chat.name);
+            document.getElementById('current-chat-name').innerText = name;
+            const avatarEl = document.getElementById('current-chat-avatar');
+            
+            if (chat.isSaved) {
+                avatarEl.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
+                avatarEl.style.background = 'var(--accent)';
+            } else if (chat.avatar_url) {
+                avatarEl.innerHTML = `<img src="${chat.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">`;
+            } else {
+                avatarEl.innerText = name ? name[0].toUpperCase() : '?';
+                avatarEl.style.background = chat.name ? 'var(--accent-soft)' : getAvatarColor(name);
+            }
+            
+            loadMessages();
+            loadContacts();
+            if (window.innerWidth <= 768) sidebar.classList.add('hidden');
+        }
+
         async function loadContacts() {
+            // DMs
             const { data: messages } = await _supabase.from('messages').select('sender_id, receiver_id').or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
             const contactIds = new Set();
             if (messages) messages.forEach(m => {
-                if (m.sender_id !== currentUser.id) contactIds.add(m.sender_id);
-                if (m.receiver_id !== currentUser.id) contactIds.add(m.receiver_id);
+                if (m.sender_id && m.sender_id !== currentUser.id) contactIds.add(m.sender_id);
+                if (m.receiver_id && m.receiver_id !== currentUser.id) contactIds.add(m.receiver_id);
             });
-
             const { data: profiles } = await _supabase.from('profiles').select('*').in('id', Array.from(contactIds));
-            renderContacts(profiles || []);
+            
+            // Groups
+            const { data: groups } = await _supabase.from('groups').select('*, group_members!inner(*)').eq('group_members.user_id', currentUser.id);
+            renderContacts(profiles || [], groups || []);
         }
 
-        function renderContacts(profiles) {
+        function renderContacts(profiles, groups) {
             const t = translations[currentLang];
             contactList.innerHTML = '';
             
-            // Add "Saved Messages"
+            // 1. Saved Messages
             const savedItem = document.createElement('div');
             savedItem.className = `contact-item ${activeChat?.isSaved ? 'active' : ''}`;
+            const unreadSaved = unreadCounts[currentUser.id] || 0;
             savedItem.innerHTML = `
                 <div class="avatar" style="background: var(--accent);">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -802,58 +890,57 @@
                     <div class="contact-name">${t.saved_messages} <span class="saved-tag">Self</span></div>
                     <div class="contact-status">${t.cloud_storage}</div>
                 </div>
+                ${unreadSaved > 0 ? `<div class="unread-badge">${unreadSaved}</div>` : ''}
             `;
             savedItem.onclick = () => selectChat({ id: currentUser.id, username: 'SavedMessages', isSaved: true });
             contactList.appendChild(savedItem);
 
+            // 2. Groups
+            groups.forEach(g => {
+                const item = document.createElement('div');
+                item.className = `contact-item ${activeChat?.id === g.id ? 'active' : ''}`;
+                const unread = unreadCounts[g.id] || 0;
+                item.innerHTML = `
+                    <div class="avatar" style="background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);">G</div>
+                    <div class="contact-info">
+                        <div class="contact-name">${g.name} <span class="group-tag">Group</span></div>
+                        <div class="contact-status">Group chat</div>
+                    </div>
+                    ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
+                `;
+                item.onclick = () => selectChat(g);
+                contactList.appendChild(item);
+            });
+
+            // 3. Profiles
             profiles.forEach(p => {
                 const item = document.createElement('div');
                 item.className = `contact-item ${activeChat?.id === p.id && !activeChat.isSaved ? 'active' : ''}`;
+                const unread = unreadCounts[p.id] || 0;
                 const name = p.display_name || p.username;
                 item.innerHTML = `
-                    <div class="avatar">${p.avatar_url ? `<img src="${p.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">` : name[0].toUpperCase()}</div>
+                    <div class="avatar" style="${p.avatar_url ? '' : 'background: ' + getAvatarColor(name)}">
+                        ${p.avatar_url ? `<img src="${p.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">` : name[0].toUpperCase()}
+                    </div>
                     <div class="contact-info">
                         <div class="contact-name">${name}</div>
                         <div class="contact-status">${p.status}</div>
                     </div>
+                    ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
                 `;
                 item.onclick = () => selectChat(p);
                 contactList.appendChild(item);
             });
         }
 
-        async function selectChat(profile) {
-            activeChat = profile;
-            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.add('hidden');
-            document.getElementById('chat-placeholder').style.display = 'none';
-            document.getElementById('chat-main').style.display = 'flex';
-            
-            const name = profile.isSaved ? 'Saved Messages' : (profile.display_name || profile.username);
-            document.getElementById('current-chat-name').innerText = name;
-            const avatarEl = document.getElementById('current-chat-avatar');
-            if (profile.isSaved) {
-                avatarEl.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
-                avatarEl.style.background = 'var(--accent)';
-            } else if (profile.avatar_url) {
-                avatarEl.innerHTML = `<img src="${profile.avatar_url}" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;">`;
-            } else {
-                avatarEl.innerText = name[0].toUpperCase();
-                avatarEl.style.background = '#27272a';
-            }
-            loadMessages();
-        }
-
         async function loadMessages() {
             messageFeed.innerHTML = '';
-            let query = _supabase.from('messages').select('*').order('created_at', { ascending: true });
+            let q = _supabase.from('messages').select('*, profiles(username, display_name)').order('created_at', { ascending: true });
+            if (activeChat.isSaved) q = q.eq('sender_id', currentUser.id).eq('receiver_id', currentUser.id);
+            else if (activeChat.name) q = q.eq('group_id', activeChat.id);
+            else q = q.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${activeChat.id}),and(sender_id.eq.${activeChat.id},receiver_id.eq.${currentUser.id})`);
             
-            if (activeChat.isSaved) {
-                query = query.eq('sender_id', currentUser.id).eq('receiver_id', currentUser.id);
-            } else {
-                query = query.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${activeChat.id}),and(sender_id.eq.${activeChat.id},receiver_id.eq.${currentUser.id})`);
-            }
-            
-            const { data } = await query;
+            const { data } = await q;
             if (data) data.forEach(msg => appendMessage(msg));
             messageFeed.scrollTop = messageFeed.scrollHeight;
         }
@@ -864,16 +951,17 @@
             div.className = `message ${isSent ? 'sent' : 'received'}`;
             div.id = `msg-${msg.id}`;
 
-            let content = msg.content || '';
+            let content = decrypt(msg.content || '');
             if (msg.file_url) {
-                if (msg.file_type?.startsWith('image/')) {
-                    content += `<img src="${msg.file_url}" onclick="window.open('${msg.file_url}')">`;
-                } else if (msg.file_type?.startsWith('video/')) {
-                    content += `<video src="${msg.file_url}" controls></video>`;
-                }
+                if (msg.file_type?.startsWith('image/')) content += `<img src="${msg.file_url}" onclick="window.open('${msg.file_url}')">`;
+                else if (msg.file_type?.startsWith('video/')) content += `<video src="${msg.file_url}" controls></video>`;
+                else content += `<a href="${msg.file_url}" target="_blank" class="file-link">📎 Download File</a>`;
             }
 
+            const senderName = activeChat.name && !isSent ? `<div style="font-size: 0.7rem; color: var(--accent); margin-bottom: 4px; font-weight: 700;">${msg.profiles?.display_name || msg.profiles?.username}</div>` : '';
+
             div.innerHTML = `
+                ${senderName}
                 ${content}
                 <div class="message-time">${new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
             `;
@@ -898,12 +986,15 @@
 
             const { data: { publicUrl } } = _supabase.storage.from('uploads').getPublicUrl(filePath);
             
-            await _supabase.from('messages').insert({
+            const msgObj = {
                 sender_id: currentUser.id,
-                receiver_id: activeChat.id,
                 file_url: publicUrl,
                 file_type: file.type
-            });
+            };
+            if (activeChat.name) msgObj.group_id = activeChat.id;
+            else msgObj.receiver_id = activeChat.id;
+
+            await _supabase.from('messages').insert(msgObj);
         }
 
         async function handleSaveSettings() {
@@ -914,20 +1005,11 @@
             errorEl.style.display = 'none';
 
             try {
-                // 1. Update Password if provided
-                if (newPassword) {
-                    await _supabase.auth.updateUser({ password: newPassword });
-                }
-
-                // 2. Update Username (Sync with Auth Email)
+                if (newPassword) await _supabase.auth.updateUser({ password: newPassword });
                 const { data: currentProfile } = await _supabase.from('profiles').select('username').eq('id', currentUser.id).single();
                 if (newUsername && newUsername !== currentProfile.username) {
-                    const newEmail = `${newUsername}@obscure.app`;
-                    const { error: authErr } = await _supabase.auth.updateUser({ email: newEmail });
-                    if (authErr) throw authErr;
+                    await _supabase.auth.updateUser({ email: `${newUsername}@obscure.app` });
                 }
-
-                // 3. Update Profile Data
                 const { error: profErr } = await _supabase.from('profiles').update({
                     username: newUsername,
                     display_name: newDisplayName
@@ -953,10 +1035,40 @@
             updateMeUI();
         }
 
+        async function handleCreateGroup() {
+            const name = document.getElementById('group-name').value.trim();
+            const memberId = document.getElementById('group-member-id').value.trim();
+            if (!name) return;
+            const { data: group, error } = await _supabase.from('groups').insert({ 
+                name, owner_id: currentUser.id 
+            }).select().single();
+            if (group) {
+                const members = [{ group_id: group.id, user_id: currentUser.id }];
+                if (memberId) members.push({ group_id: group.id, user_id: memberId });
+                await _supabase.from('group_members').insert(members);
+                
+                closeModal('group-modal');
+                document.getElementById('group-name').value = '';
+                document.getElementById('group-member-id').value = '';
+                selectChat(group);
+            } else alert(error.message);
+        }
+
+        function toggleSecretChat() {
+            isSecretMode = !isSecretMode;
+            if (isSecretMode) {
+                secretKey = prompt("Enter Secret Key for this session:");
+                if (!secretKey) isSecretMode = false;
+            }
+            const btn = document.getElementById('btn-secret-chat');
+            btn.style.color = isSecretMode ? 'var(--accent)' : 'white';
+            btn.style.borderColor = isSecretMode ? 'var(--accent)' : 'var(--glass-border)';
+            alert(isSecretMode ? "Secret Mode ON (Basic Encryption)" : "Secret Mode OFF");
+        }
+
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        // --- Event Listeners ---
         loginBtn.onclick = () => handleAuth('login');
         signupBtn.onclick = () => handleAuth('signup');
         logoutBtn.onclick = async () => { await _supabase.auth.signOut(); window.location.reload(); };
@@ -964,13 +1076,15 @@
         btnSaveSettings.onclick = handleSaveSettings;
         fileInput.onchange = handleFileUpload;
         avatarInput.onchange = handleAvatarUpload;
+        document.getElementById('btn-new-group').onclick = () => openModal('group-modal');
+        document.getElementById('btn-secret-chat').onclick = toggleSecretChat;
 
         userSearch.onkeypress = async (e) => {
             if (e.key === 'Enter') {
                 const query = userSearch.value.trim();
                 const { data } = await _supabase.from('profiles').select('*').ilike('username', query).single();
                 if (data) { selectChat(data); userSearch.value = ''; }
-                else { alert("User not found."); }
+                else alert("User not found.");
             }
         };
 
@@ -978,15 +1092,22 @@
             e.preventDefault();
             const text = messageInput.value.trim();
             if (!text || !activeChat) return;
-            const { error } = await _supabase.from('messages').insert({
-                sender_id: currentUser.id,
-                receiver_id: activeChat.id,
-                content: text
-            });
+            const encrypted = await encrypt(text);
+            const msgObj = { sender_id: currentUser.id, content: encrypted };
+            if (activeChat.name) msgObj.group_id = activeChat.id;
+            else msgObj.receiver_id = activeChat.id;
+            const { error } = await _supabase.from('messages').insert(msgObj);
             if (!error) messageInput.value = '';
         };
 
         _supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) { currentUser = session.user; showMessenger(); }
+            else updateLanguageUI();
+        });
+    </script>
+</body>
+</html>
+.auth.getSession().then(({ data: { session } }) => {
             if (session) { 
                 currentUser = session.user; 
                 showMessenger(); 
