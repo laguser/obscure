@@ -418,8 +418,10 @@
 
         // --- Auth Logic ---
         async function handleAuth(type) {
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
             const errorEl = document.getElementById('auth-error');
 
             if (!username || !password) return;
@@ -432,16 +434,6 @@
             let result;
             if (type === 'signup') {
                 result = await _supabase.auth.signUp({ email, password });
-                if (!result.error) {
-                    // Create profile entry
-                    const { error: profileError } = await _supabase.from('profiles').insert({
-                        id: result.data.user.id,
-                        username: username
-                    });
-                    if (profileError) {
-                        alert("Profile creation failed: " + profileError.message);
-                    }
-                }
             } else {
                 result = await _supabase.auth.signInWithPassword({ email, password });
             }
@@ -450,8 +442,19 @@
                 errorEl.innerText = result.error.message;
                 errorEl.style.display = 'block';
             } else {
+                // Ensure profile exists in profiles table
+                const { data: profile } = await _supabase.from('profiles').select('*').eq('id', result.data.user.id).single();
+                
+                if (!profile) {
+                    const { error: pErr } = await _supabase.from('profiles').insert({
+                        id: result.data.user.id,
+                        username: username
+                    });
+                    if (pErr) console.error("Profile creation error:", pErr);
+                }
+
                 if (type === 'signup' && !result.data.session) {
-                    alert("Account created! Please check if 'Confirm Email' is disabled in Supabase settings. You might need to refresh and login.");
+                    alert("Account created! Please confirm user in Supabase (Users table) OR disable 'Confirm Email' in settings.");
                 } else {
                     currentUser = result.data.user;
                     showMessenger();
@@ -471,21 +474,17 @@
                     if (activeChat && (msg.sender_id === activeChat.id || msg.receiver_id === activeChat.id)) {
                         appendMessage(msg);
                     }
-                    loadContacts(); // Refresh sidebar to show latest activity
+                    loadContacts();
                 })
                 .subscribe();
         }
 
         async function loadContacts() {
-            // Load existing chats (users we've messaged)
             const { data, error } = await _supabase
                 .from('messages')
                 .select('sender_id, receiver_id')
                 .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
 
-            if (error) return;
-
-            // Extract unique user IDs from messages
             const contactIds = new Set();
             if (data) data.forEach(m => {
                 if (m.sender_id !== currentUser.id) contactIds.add(m.sender_id);
@@ -497,11 +496,7 @@
                 return;
             }
 
-            const { data: profiles } = await _supabase
-                .from('profiles')
-                .select('*')
-                .in('id', Array.from(contactIds));
-
+            const { data: profiles } = await _supabase.from('profiles').select('*').in('id', Array.from(contactIds));
             renderContacts(profiles || []);
         }
 
@@ -522,7 +517,7 @@
             });
         }
 
-        // Search logic
+        // Search logic - CASE INSENSITIVE using ilike
         userSearch.onkeypress = async (e) => {
             if (e.key === 'Enter') {
                 const query = userSearch.value.trim();
@@ -531,14 +526,14 @@
                 const { data, error } = await _supabase
                     .from('profiles')
                     .select('*')
-                    .eq('username', query)
+                    .ilike('username', query)
                     .single();
 
                 if (data) {
                     selectChat(data);
                     userSearch.value = '';
                 } else {
-                    alert('User not found');
+                    alert(`User "${query}" not found. TIP: Check if the user really registered and if you correctly disabled email confirmation.`);
                 }
             }
         };
